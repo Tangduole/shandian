@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { v4 as uuidv4 } from 'uuid'
-import YTDlpWrap from 'yt-dlp-wrap'
+import ytDlpWrapModule from 'yt-dlp-wrap'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
@@ -9,13 +9,16 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
+// ESM default import fix for yt-dlp-wrap
+const YTDlpWrap = (ytDlpWrapModule as any).default || ytDlpWrapModule
+
 // Config
 const PORT = Number(process.env.PORT) || 3001
 const DOWNLOAD_DIR = join(process.cwd(), 'downloads')
 const DATA_DIR = join(process.cwd(), 'data')
 const FRONTEND_DIST = join(process.cwd(), 'frontend', 'dist')
 
-// yt-dlp
+// yt-dlp binary
 const YTDLP_PATH = '/usr/local/bin/yt-dlp'
 const ytDlp = existsSync(YTDLP_PATH)
   ? new YTDlpWrap(YTDLP_PATH)
@@ -73,12 +76,17 @@ app.use(express.json())
 
 // Serve frontend
 if (existsSync(FRONTEND_DIST)) {
+  console.log(`Serving frontend from ${FRONTEND_DIST}`)
   app.use(express.static(FRONTEND_DIST))
 }
 
 // Health
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() })
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    ytDlp: existsSync(YTDLP_PATH) ? 'installed' : 'not found'
+  })
 })
 
 // Video info
@@ -87,7 +95,14 @@ app.get('/api/info', async (req, res) => {
   if (!url) return res.status(400).json({ success: false, message: 'URL is required' })
   try {
     const info = await ytDlp.getVideoInfo(url)
-    res.json({ success: true, data: { title: info.title, thumbnail: info.thumbnail, duration: info.duration } })
+    res.json({
+      success: true,
+      data: {
+        title: info.title,
+        thumbnail: info.thumbnail,
+        duration: info.duration
+      }
+    })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to get video info'
     res.status(500).json({ success: false, message: msg })
@@ -101,7 +116,11 @@ app.post('/api/download', async (req, res) => {
 
   const taskId = uuidv4()
   const now = new Date().toISOString()
-  const task: DownloadTask = { taskId, url, platform, options, status: 'pending', progress: 0, createdAt: now, updatedAt: now }
+  const task: DownloadTask = {
+    taskId, url, platform, options,
+    status: 'pending', progress: 0,
+    createdAt: now, updatedAt: now
+  }
   tasks[taskId] = task
   saveTasks(tasks)
   processDownload(taskId).catch(e => console.error('Task error:', e))
@@ -117,7 +136,9 @@ app.get('/api/status/:taskId', (req, res) => {
 
 // History
 app.get('/api/history', (_req, res) => {
-  const list = Object.values(tasks).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 50)
+  const list = Object.values(tasks)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50)
   res.json({ success: true, data: list })
 })
 
@@ -175,9 +196,14 @@ async function processDownload(taskId: string) {
         ])
         proc.stdout?.on('data', (chunk: Buffer) => {
           const m = chunk.toString().match(/(\d+\.?\d*)%/)
-          if (m) { task.progress = Math.round(30 + parseFloat(m[1]) * 0.6); saveTasks(tasks) }
+          if (m) {
+            task.progress = Math.round(30 + parseFloat(m[1]) * 0.6)
+            saveTasks(tasks)
+          }
         })
-        proc.on('close', (code: number | null) => code === 0 ? resolve() : reject(new Error(`Exit code ${code}`)))
+        proc.on('close', (code: number | null) => {
+          code === 0 ? resolve() : reject(new Error(`Exit code ${code}`))
+        })
         proc.on('error', reject)
       })
 
