@@ -1,36 +1,34 @@
-# 闪电下载器 - Dockerfile
 FROM node:20-slim
 
-# 安装系统依赖 + yt-dlp
-RUN apt-get update && apt-get install -y \
-    python3 \
-    ffmpeg \
-    curl \
+# 系统依赖 + yt-dlp
+RUN apt-get update && apt-get install -y python3 ffmpeg curl \
     && rm -rf /var/lib/apt/lists/* \
     && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
 WORKDIR /app
 
-# 1. 复制根 package.json
-COPY package.json ./
+# 先复制 .gitignore 防止 COPY . 把 node_modules 带进去
+COPY .gitignore ./
 
-# 2. 复制 frontend
+# 前端
 COPY frontend/package.json frontend/
-RUN cd frontend && npm install
+COPY frontend/tsconfig.json frontend/
+COPY frontend/tsconfig.node.json frontend/
+COPY frontend/vite.config.ts frontend/
+COPY frontend/tailwind.config.js frontend/
+COPY frontend/postcss.config.js frontend/
+COPY frontend/index.html frontend/
+COPY frontend/src/ frontend/src/
+COPY frontend/public/ frontend/public/
+RUN cd frontend && npm install && npm run build
 
-# 3. 复制 backend
+# 后端
 COPY backend/package.json backend/
-RUN cd backend && npm install
+COPY backend/tsconfig.json backend/
+COPY backend/src/ backend/src/
+RUN cd backend && npm install && npm run build
 
-# 4. 复制全部源码
-COPY . .
-
-# 5. 构建
-RUN npm run build
-
-# 6. 暴露端口
+# 启动
 EXPOSE 3001
-
-# 7. 启动
-CMD ["npm", "start"]
+CMD ["node", "backend/dist/index.js"]
