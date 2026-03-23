@@ -1,12 +1,5 @@
 {
-  "name": "lightning-downloader",
+  "name": "shandian",
   "version": "1.0.0",
-  "description": "闪电下载器 - Lightning Downloader",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install && npm run build",
-    "start": "node backend/dist/index.js",
-    "dev": "echo 'Use dev:frontend and dev:backend separately'"
-  }
+  "private": true
 }
