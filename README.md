@@ -1,113 +1,39 @@
-# 🛵 Little Electric Donkey
+# ⚡ 闪电下载器 / Lightning Downloader
 
-Professional video downloader supporting YouTube, TikTok, X/Twitter, Douyin, and more.
+多平台视频下载工具，支持 YouTube、TikTok、X/Twitter、抖音、Bilibili。
 
-## ✨ Features
+## Features
 
-- 📹 **Multi-platform support**: YouTube, TikTok, X/Twitter, Douyin, Bilibili, etc.
-- 🎵 **Multiple formats**: Video (MP4), Audio (MP3), Thumbnail, Subtitles
-- 🤖 **AI Transcription**: Automatic speech-to-text using Whisper
-- 📱 **Mobile-friendly**: Responsive design for all devices
-- 🎨 **Dark theme**: Sleek dark UI design
+- 🎬 Video download (MP4)
+- 🎵 Audio extraction (MP3)
+- 🖼️ Thumbnail download (JPG)
+- 📝 AI Transcription (TXT/SRT)
+- 🌙 Dark theme UI
 
-## 🚀 Quick Start
+## Tech Stack
 
-### Prerequisites
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Node.js + Express + yt-dlp
+- **Deploy**: Docker + Railway
 
-- Node.js 18+
-- yt-dlp
-- FFmpeg (optional, for audio extraction)
-
-### Installation
+## Quick Start
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd shandian
+# Install
+cd frontend && npm install
+cd ../backend && npm install
 
-# Install frontend dependencies
-cd frontend
-npm install
+# Dev
+npm run dev:frontend  # port 3000
+npm run dev:backend   # port 3001
 
-# Install backend dependencies
-cd ../backend
-npm install
-
-# Create data directories
-mkdir -p data downloads
-```
-
-### Development
-
-```bash
-# Start backend (port 3001)
-cd backend
-npm run dev
-
-# Start frontend (port 3000)
-cd frontend
-npm run dev
-```
-
-### Production Build
-
-```bash
-# Build frontend
-cd frontend
-npm run build
-
-# Start production server
-cd ../backend
+# Build & Start
 npm run build
 npm start
 ```
 
-## 📁 Project Structure
+## Deploy to Railway
 
-```
-shandian/
-├── frontend/          # React + TypeScript + Tailwind
-│   ├── src/
-│   │   ├── App.tsx   # Main application
-│   │   ├── main.tsx  # Entry point
-│   │   └── index.css # Styles
-│   ├── index.html
-│   └── package.json
-├── backend/           # Express + TypeScript
-│   ├── src/
-│   │   └── index.ts  # Server & API
-│   └── package.json
-├── downloads/         # Downloaded files
-├── data/              # Task data
-└── README.md
-```
-
-## 🔌 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/info?url=` | Get video info |
-| POST | `/api/download` | Create download task |
-| GET | `/api/status/:taskId` | Get task status |
-| GET | `/api/history` | Get task history |
-| DELETE | `/api/tasks/:taskId` | Delete task |
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18, TypeScript, Tailwind CSS, Lucide Icons
-- **Backend**: Node.js, Express, TypeScript
-- **Download Engine**: yt-dlp
-- **AI Transcription**: OpenAI Whisper (optional)
-
-## 📜 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
-## ⚠️ Disclaimer
-
-This tool is for **personal use only**. Please respect copyright laws and terms of service of video platforms. The developers are not responsible for any misuse of this software.
-
----
-
-Made with ❤️ by Little Electric Donkey Team
+1. Push to GitHub
+2. Connect to [Railway](https://railway.app)
+3. Auto-deploy via Dockerfile

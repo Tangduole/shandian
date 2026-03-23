@@ -1,19 +1,12 @@
 {
   "name": "lightning-downloader",
   "version": "1.0.0",
-  "description": "闪电下载器 - 多平台视频下载工具",
+  "description": "闪电下载器 - Lightning Downloader",
   "private": true,
+  "type": "module",
   "scripts": {
-    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "build": "npm run build:frontend && npm run build:backend",
-    "build:frontend": "cd frontend && npm install && npm run build",
-    "build:backend": "cd backend && npm install && npm run build",
-    "start": "cd backend && npm start",
-    "deploy:railway": "npm run build && git push origin main"
-  },
-  "keywords": ["video-downloader", "yt-dlp", "react", "typescript"],
-  "author": "",
-  "license": "MIT"
+    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install && npm run build",
+    "start": "node backend/dist/index.js",
+    "dev": "echo 'Use dev:frontend and dev:backend separately'"
+  }
 }

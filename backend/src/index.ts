@@ -3,19 +3,25 @@ import cors from 'cors'
 import { v4 as uuidv4 } from 'uuid'
 import YTDlpWrap from 'yt-dlp-wrap'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
-import { join, extname } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 // Config
-const PORT = process.env.PORT || 3001
+const PORT = Number(process.env.PORT) || 3001
 const DOWNLOAD_DIR = join(process.cwd(), 'downloads')
 const DATA_DIR = join(process.cwd(), 'data')
-const ytDlp = new YTDlpWrap()
+const FRONTEND_DIST = join(process.cwd(), 'frontend', 'dist')
 
-// Ensure directories exist
+// yt-dlp
+const YTDLP_PATH = '/usr/local/bin/yt-dlp'
+const ytDlp = existsSync(YTDLP_PATH)
+  ? new YTDlpWrap(YTDLP_PATH)
+  : new YTDlpWrap()
+
+// Ensure directories
 if (!existsSync(DOWNLOAD_DIR)) mkdirSync(DOWNLOAD_DIR, { recursive: true })
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
 
@@ -36,14 +42,13 @@ interface DownloadTask {
   updatedAt: string
 }
 
-// Data storage
-const getTasksFile = () => join(DATA_DIR, 'tasks.json')
+// Storage
+const TASKS_FILE = join(DATA_DIR, 'tasks.json')
 
-const loadTasks = (): Record<string, DownloadTask> => {
+function loadTasks(): Record<string, DownloadTask> {
   try {
-    const file = getTasksFile()
-    if (existsSync(file)) {
-      return JSON.parse(readFileSync(file, 'utf-8'))
+    if (existsSync(TASKS_FILE)) {
+      return JSON.parse(readFileSync(TASKS_FILE, 'utf-8'))
     }
   } catch (err) {
     console.error('Failed to load tasks:', err)
@@ -51,243 +56,157 @@ const loadTasks = (): Record<string, DownloadTask> => {
   return {}
 }
 
-const saveTasks = (tasks: Record<string, DownloadTask>) => {
+function saveTasks(tasks: Record<string, DownloadTask>) {
   try {
-    writeFileSync(getTasksFile(), JSON.stringify(tasks, null, 2))
+    writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2))
   } catch (err) {
     console.error('Failed to save tasks:', err)
   }
 }
 
-let tasks = loadTasks()
+const tasks = loadTasks()
 
-// Express app
+// Express
 const app = express()
 app.use(cors())
 app.use(express.json())
 
-// Serve static frontend files in production
-const frontendDistPath = join(process.cwd(), 'frontend', 'dist')
-if (existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath))
+// Serve frontend
+if (existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST))
 }
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+// Health
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() })
 })
 
-// Get video info
+// Video info
 app.get('/api/info', async (req, res) => {
+  const url = req.query.url as string
+  if (!url) return res.status(400).json({ success: false, message: 'URL is required' })
   try {
-    const { url } = req.query
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ success: false, message: 'URL is required' })
-    }
-
     const info = await ytDlp.getVideoInfo(url)
-    
-    res.json({
-      success: true,
-      data: {
-        title: info.title,
-        thumbnail: info.thumbnail,
-        duration: info.duration,
-        platform: info.extractor,
-      }
-    })
-  } catch (err: any) {
-    console.error('Get info error:', err)
-    res.status(500).json({ 
-      success: false, 
-      message: err.message || 'Failed to get video info' 
-    })
+    res.json({ success: true, data: { title: info.title, thumbnail: info.thumbnail, duration: info.duration } })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to get video info'
+    res.status(500).json({ success: false, message: msg })
   }
 })
 
-// Create download task
+// Create task
 app.post('/api/download', async (req, res) => {
-  try {
-    const { url, platform, options = ['video'] } = req.body
-    
-    if (!url) {
-      return res.status(400).json({ success: false, message: 'URL is required' })
-    }
+  const { url, platform, options = ['video'] } = req.body
+  if (!url) return res.status(400).json({ success: false, message: 'URL is required' })
 
-    const taskId = uuidv4()
-    const task: DownloadTask = {
-      taskId,
-      url,
-      platform,
-      options,
-      status: 'pending',
-      progress: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    tasks[taskId] = task
-    saveTasks(tasks)
-
-    // Start processing
-    processDownload(taskId)
-
-    res.json({ success: true, data: { taskId, status: 'pending' } })
-  } catch (e: any) {
-    console.error('Create task error:', e)
-    res.status(500).json({ 
-      success: false, 
-      message: e.message || 'Failed to create task' 
-    })
-  }
+  const taskId = uuidv4()
+  const now = new Date().toISOString()
+  const task: DownloadTask = { taskId, url, platform, options, status: 'pending', progress: 0, createdAt: now, updatedAt: now }
+  tasks[taskId] = task
+  saveTasks(tasks)
+  processDownload(taskId).catch(e => console.error('Task error:', e))
+  res.json({ success: true, data: { taskId, status: 'pending' } })
 })
 
-// Get task status
+// Task status
 app.get('/api/status/:taskId', (req, res) => {
-  const { taskId } = req.params
-  const task = tasks[taskId]
-  
-  if (!task) {
-    return res.status(404).json({ success: false, message: 'Task not found' })
-  }
-  
-  res.json({ success: true, data: task })
+  const t = tasks[req.params.taskId]
+  if (!t) return res.status(404).json({ success: false, message: 'Not found' })
+  res.json({ success: true, data: t })
 })
 
-// Get history
-app.get('/api/history', (req, res) => {
-  const history = Object.values(tasks)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 50)
-  
-  res.json({ success: true, data: history })
+// History
+app.get('/api/history', (_req, res) => {
+  const list = Object.values(tasks).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 50)
+  res.json({ success: true, data: list })
 })
 
 // Delete task
 app.delete('/api/tasks/:taskId', (req, res) => {
-  const { taskId } = req.params
-  
-  if (!tasks[taskId]) {
-    return res.status(404).json({ success: false, message: 'Task not found' })
-  }
-  
-  delete tasks[taskId]
+  if (!tasks[req.params.taskId]) return res.status(404).json({ success: false, message: 'Not found' })
+  delete tasks[req.params.taskId]
   saveTasks(tasks)
-  
-  res.json({ success: true, message: 'Task deleted' })
+  res.json({ success: true, message: 'Deleted' })
 })
 
-// Serve downloads
+// Downloads
 app.use('/downloads', express.static(DOWNLOAD_DIR))
 
-// Serve frontend for all other routes (SPA support)
-if (existsSync(frontendDistPath)) {
-  app.get('*', (req, res) => {
-    res.sendFile(join(frontendDistPath, 'index.html'))
+// SPA fallback
+if (existsSync(FRONTEND_DIST)) {
+  app.get('*', (_req, res) => {
+    res.sendFile(join(FRONTEND_DIST, 'index.html'))
   })
 }
 
-// Process download
+// Download processor
 async function processDownload(taskId: string) {
   const task = tasks[taskId]
   if (!task) return
 
   try {
-    // Update status to processing
     task.status = 'processing'
     task.updatedAt = new Date().toISOString()
-    tasks[taskId] = task
     saveTasks(tasks)
 
-    // Get video info
-    task.progress = 10
     const info = await ytDlp.getVideoInfo(task.url)
     task.title = info.title
     task.thumbnail = info.thumbnail
     task.platform = info.extractor
-    tasks[taskId] = task
+    task.progress = 10
     saveTasks(tasks)
 
-    // Create task directory
     const taskDir = join(DOWNLOAD_DIR, taskId)
     if (!existsSync(taskDir)) mkdirSync(taskDir, { recursive: true })
 
-    // Download based on options
     if (task.options.includes('video')) {
       task.status = 'downloading'
       task.progress = 30
-      tasks[taskId] = task
       saveTasks(tasks)
 
-      const outputPath = join(taskDir, 'video.%(ext)s')
-      
+      const outPath = join(taskDir, 'video.%(ext)s')
       await new Promise<void>((resolve, reject) => {
-        const download = ytDlp.exec([
+        const proc = ytDlp.exec([
           task.url,
-          '-o', outputPath,
+          '-o', outPath,
           '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
           '--merge-output-format', 'mp4',
           '--no-warnings'
         ])
-
-        let lastProgress = 30
-        download.stdout?.on('data', (data) => {
-          const output = data.toString()
-          const progressMatch = output.match(/(\d+\.?\d*)%/)
-          if (progressMatch) {
-            const progress = parseFloat(progressMatch[1])
-            lastProgress = 30 + (progress * 0.6)
-            task.progress = Math.round(lastProgress)
-            tasks[taskId] = task
-            saveTasks(tasks)
-          }
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          const m = chunk.toString().match(/(\d+\.?\d*)%/)
+          if (m) { task.progress = Math.round(30 + parseFloat(m[1]) * 0.6); saveTasks(tasks) }
         })
-
-        download.on('close', (code) => {
-          if (code === 0) resolve()
-          else reject(new Error(`Download failed with code ${code}`))
-        })
-
-        download.on('error', reject)
+        proc.on('close', (code: number | null) => code === 0 ? resolve() : reject(new Error(`Exit code ${code}`)))
+        proc.on('error', reject)
       })
 
-      // Find downloaded file
       const files = readdirSync(taskDir)
-      const videoFile = files.find(f => f.startsWith('video.'))
-      if (videoFile) {
-        task.downloadUrl = `/downloads/${taskId}/${videoFile}`
-      }
+      const vf = files.find(f => f.startsWith('video.'))
+      if (vf) task.downloadUrl = `/downloads/${taskId}/${vf}`
     }
 
-    // ASR placeholder
     if (task.options.includes('transcription') || task.options.includes('subtitles')) {
       task.status = 'asr'
       task.progress = 90
-      tasks[taskId] = task
       saveTasks(tasks)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      task.asrText = "[ASR 预留功能] 请使用本地部署版本体验完整功能"
+      await new Promise(r => setTimeout(r, 1000))
+      task.asrText = '[ASR placeholder]'
     }
 
-    // Complete
     task.status = 'completed'
     task.progress = 100
     task.updatedAt = new Date().toISOString()
-    tasks[taskId] = task
     saveTasks(tasks)
-
-  } catch (err: any) {
-    console.error('Process download error:', err)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
     task.status = 'error'
-    task.error = err.message || 'Unknown error'
+    task.error = msg
     task.updatedAt = new Date().toISOString()
-    tasks[taskId] = task
     saveTasks(tasks)
   }
 }
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`闪电下载器 server running on port ${PORT}`)
-  console.log(`API: http://localhost:${PORT}/api`)
+  console.log(`⚡ 闪电下载器 running on port ${PORT}`)
 })
