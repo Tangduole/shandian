@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: shandian-backend
+    runtime: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node src/app.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.15.0
+    healthCheckPath: /api/health
+    disk:
+      name: downloads
+      mountPath: /opt/render/project/src/backend/downloads
+      sizeGB: 1
+    autoDeploy: true
+    plan: free
