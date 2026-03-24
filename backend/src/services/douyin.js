@@ -254,14 +254,35 @@ async function downloadDouyin(url, taskId, onProgress) {
 
     let videoBuf;
     try {
-      videoBuf = await httpGet(info.videoUrl, { responseType: 'arraybuffer', timeout: 120000 });
+      videoBuf = await httpGet(info.videoUrl, { 
+        responseType: 'arraybuffer', 
+        timeout: 120000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+          'Referer': 'https://www.douyin.com/',
+          'Accept': '*/*',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          'Connection': 'keep-alive',
+          'Sec-Fetch-Dest': 'video',
+          'Sec-Fetch-Mode': 'no-cors',
+          'Sec-Fetch-Site': 'cross-site'
+        }
+      });
     } catch (e) {
       // 备用：试试 playwm 链接
       if (info.videoUrl.includes('playwm')) {
         // playwm 需要去掉水印参数
         const cleanUrl = info.videoUrl.replace('playwm', 'play');
-        try { videoBuf = await httpGet(cleanUrl, { responseType: 'arraybuffer', timeout: 120000 }); }
-        catch {}
+        try { 
+          videoBuf = await httpGet(cleanUrl, { 
+            responseType: 'arraybuffer', 
+            timeout: 120000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+              'Referer': 'https://www.douyin.com/'
+            }
+          }); 
+        } catch {}
       }
       if (!videoBuf) throw new Error(`视频下载失败: ${e.message}`);
     }
