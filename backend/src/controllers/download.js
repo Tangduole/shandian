@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { downloadDouyin, isDouyinUrl } = require('../services/douyin');
+const { downloadX, isXUrl } = require('../services/x-download');
 
 // 内存存储任务数据
 const tasks = new Map();
@@ -52,6 +53,7 @@ async function createDownload(req, res) {
     let detectedPlatform = platform;
     if (!detectedPlatform) {
       if (isDouyinUrl(url)) detectedPlatform = 'douyin';
+      else if (isXUrl(url)) detectedPlatform = 'x';
       // 其他平台检测逻辑...
     }
 
@@ -122,6 +124,8 @@ async function processDownload(taskId, url, platform, options) {
     
     if (platform === 'douyin') {
       result = await downloadDouyin(url, taskId, onProgress);
+    } else if (platform === 'x') {
+      result = await downloadX(url, taskId, onProgress);
     } else {
       throw new Error(`暂不支持的平台: ${platform}`);
     }
@@ -170,8 +174,8 @@ async function getInfo(req, res) {
       data: {
         url,
         title: `解析信息 - ${url}`,
-        platform: isDouyinUrl(url) ? 'douyin' : 'unknown',
-        canDownload: isDouyinUrl(url) // 目前只支持抖音
+        platform: isDouyinUrl(url) ? 'douyin' : (isXUrl(url) ? 'x' : 'unknown'),
+        canDownload: isDouyinUrl(url) || isXUrl(url) // 支持抖音和 X/Twitter
       }
     });
 
